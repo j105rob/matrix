@@ -1,1 +1,1 @@
-softflowd -n 10.254.30.224:61613 -r demo.pcap -D
+softflowd -n 10.254.30.224:61613 -r ../demo.pcap -D
