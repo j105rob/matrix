@@ -1,7 +1,10 @@
+from __future__ import absolute_import, print_function, unicode_literals
+from streamparse.bolt import Bolt
+
 from PIL import Image, ImageDraw
 import random
 from subprocess import Popen, PIPE
-class PngMaker(object):
+class PngMaker(Bolt):
     def initialize(self, conf, ctx):
         self.size = (16,16)
         self.mode = "RGBA"
