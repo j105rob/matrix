@@ -14,10 +14,11 @@ import dpkt
 class UdpSpout(Spout):
     def initialize(self, conf, context):
         try:
+            self.count = 0
             self.config(conf)
-            self.udpBuffer = Queue()
-            self.udpSocket = UdpSocket(buffer=self.udpBuffer, log=self.log)
-            t = threading.Thread(target=self.stompSocket.start)
+            self.udpBuffer = Queue.Queue()
+            self.udpSocket = UdpSocket(udpBuffer=self.udpBuffer, log=self.log)
+            t = threading.Thread(target=self.udpSocket.start)
             t.start()
             
         except Exception as e:
@@ -31,13 +32,14 @@ class UdpSpout(Spout):
     
     def next_tuple(self):
         try:
-            if self.stompSocket.state['subscribed']:
-                msg = self.udpBuffer.get(False)
-                #self.log(msg)
-                if msg == None:
-                    return
-                else: 
-                    self.emit([json.loads(msg)],stream=self.emitSream)
+            msg = self.udpBuffer.get(False)
+            #self.log(msg)
+            if msg == None:
+                return
+            else: 
+                self.emit([json.loads(msg)],stream=self.emitSream)
+                self.count +=1
+                self.log("spout count:%i"%(self.count))
         except Empty:
             return
         except Exception as e:
@@ -57,26 +59,34 @@ class NetflowV5(object):
             return None
         
 class NetflowProtocol(object):
-    def __init__(self):
-        self.netflowv5 = NetflowV5()        
-        
+    def __init__(self,udpBuffer,log=None,):
+        self.count = 0
+        self.udpBuffer = udpBuffer
+        self.log = self.logz if log == None else log
+        self.netflowv5 = NetflowV5()   
+             
+    def logz(self,msg):
+        print (msg)
+                
     def datagramReceived(self, data):
         formatted = self.netflowv5.format(data)
+        if formatted == None:
+            self.count +=1
+            self.log("Bad data:%i"%(self.count))
         try:
             for r in formatted:
                 fields = "src_addr,dst_addr,next_hop,input_iface,output_iface,pkts_sent,bytes_sent,start_time,end_time,src_port,dst_port,ip_proto,tos,src_as,dst_as,src_mask,dst_mask,tcp_flags,sys_uptime,unix_sec,unix_nsec,flow_sequence"
                 j = {key:getattr(r,key) for key in fields.split(',')}
-                print (j)
-                return(json.dumps(j))    
+                self.udpBuffer.put(json.dumps(j))  
         except Exception as e:
-            print ("Exception: %s"%(e))
+            self.log("Exception: %s"%(e))
                      
 class UdpSocket(object): 
     def __init__(self, log=None, port=61613, udpBuffer=None):       
         
         self.log = self.logz if log == None else log
         self.udpBuffer = udpBuffer
-        self.netflow = NetflowProtocol()
+        self.netflow = NetflowProtocol(self.udpBuffer,log=self.log)
         self.sessionId = ''
         self.state={
             'starting':False,
@@ -121,7 +131,7 @@ class UdpSocket(object):
             for s in readable:
                 data = s.recv(8192)
                 if data:
-                    self.udpBuffer.put(self.netflow.datagramReceived(data)) 
+                    self.netflow.datagramReceived(data)
                     if s not in self.outputs:
                         self.outputs.append(s)
                 else:

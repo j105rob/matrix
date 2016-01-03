@@ -23,7 +23,7 @@ class Anchor(Bolt):
             u = uuid.uuid1()    
             id = str(u)  
             data[self.idName] = id
-            self.log(data)      
+            #self.log(data)      
             self.emit([data],stream=self.emitSream)    
 
         except Exception as e:
