@@ -10,16 +10,16 @@ class Delay(Bolt):
     
     def config(self, conf): 
         try:
-            self.emitSream = conf["shmoocon.bolts.delay.emitStream"]
+            self.emitStream = conf["shmoocon.bolts.delay.emitStream"]
         except KeyError as e:
-            self.log("DElay bolt Config Missing key: %s"%(str(e)),"error")
+            self.log("Delay bolt Config Missing key: %s"%(str(e)),"error")
             
     def process(self, tup):
         try:
             data = tup.values[0]  
             self.queue.put(data) 
         except Exception as e:
-            self.log("Anchor Error: %s"%(str(e)),'error')
+            self.log("Delay Error: %s"%(str(e)),'error')
                         
     def process_tick(self, tup):
         try:
@@ -28,4 +28,4 @@ class Delay(Bolt):
         except Empty:
             pass
         except Exception as e:
-            self.log("Anchor Error: %s"%(str(e)),'error')
+            self.log("Delay Error: %s"%(str(e)),'error')

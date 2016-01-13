@@ -39,7 +39,7 @@ class UdpSpout(Spout):
             else: 
                 self.emit([json.loads(msg)],stream=self.emitSream)
                 self.count +=1
-                self.log("spout count:%i"%(self.count))
+                #self.log("spout count:%i"%(self.count))
         except Empty:
             return
         except Exception as e:

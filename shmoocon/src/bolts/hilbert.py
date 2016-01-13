@@ -91,7 +91,7 @@ class HilbertBolt(Bolt):
             #self.log(hilbertResult)
             raw['srchilbert'] = srcHilberts
             raw['dsthilbert'] = dstHilberts
-            self.log(raw)
+            #self.log(raw)
             self.emit([raw],stream=self.emitStream)
         except Exception as e:
             self.log("Hilbert Error: %s"%(str(e)),'error')
