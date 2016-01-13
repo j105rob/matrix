@@ -1,0 +1,1 @@
+sudo ffmpeg -threads 16 -f rawvideo -vcodec rawvideo -s 16x16 -pix_fmt argb -r 30 -i /tmp/vid -f s16le -i /dev/zero -flags +global_header -ar 44100 -ab 16k -s 426x240 -vcodec h264 -pix_fmt yuv420p -g 25 -vb 400k -profile:v baseline -r 30 -f flv "rtmp://a.rtmp.youtube.com/live2/Boyobejaminhere.6vaa-v5r1-deq9-bdxr"
