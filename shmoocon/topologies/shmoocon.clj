@@ -19,9 +19,22 @@
 	}
     ;; bolt configuration
     {
-    "anchor-bolt" (python-bolt-spec
+        "delay-bolt" (python-bolt-spec
 	     options
 	     {["udp-spout" "orig"]["orig"]}
+	     "bolts.delay.Delay"
+	     {
+	     "orig" ["orig"]
+	     }
+	     :p 1
+	     :conf {
+	            "shmoocon.bolts.delay.emitStream","orig"
+	            "topology.tick.tuple.freq.secs",0.5
+	            }
+	     ),
+    "anchor-bolt" (python-bolt-spec
+	     options
+	     {["delay-bolt" "orig"]["orig"]}
 	     "bolts.anchor.Anchor"
 	     {
 	     "orig" ["orig"]
