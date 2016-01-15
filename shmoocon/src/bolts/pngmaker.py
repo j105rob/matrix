@@ -12,20 +12,20 @@ from collections import deque
 
 class PngMaker(Bolt):
     def initialize(self, conf, ctx):
-        self.size = (16,16)
+        self.size = (272,272)
         
         self.mode = "RGBA"
         self.fill = 255 #black
         self.cnt = 0
         self.fps = 20
-        self.duration = 120
+        self.duration = 60
         self.frames = deque(maxlen=(self.fps*self.duration))
 
         self.tick = 0
         self.sample = 30
         self.fileName =''
         
-        self.compositeImage = Image.new(self.mode,(56,56),color=(self.fill,self.fill,self.fill,self.fill))
+        self.compositeImage = Image.new(self.mode,(828,828),color=(self.fill,self.fill,self.fill,self.fill))
         
         self.img = [Image.new(self.mode,self.size,color=(self.fill,self.fill,self.fill,self.fill)),
                     Image.new(self.mode,self.size,color=(self.fill,self.fill,self.fill,self.fill)),
@@ -137,15 +137,17 @@ class PngMaker(Bolt):
                    ]
             
             composite = [(0,0),
-                         (0,40),
-                         (20,20),
-                         (40,0),
-                         (40,40)]
-            
+                         (552,0),
+                         (276,276),
+                         (0,552),
+                         (552,552)]
+
             for i in range(0,5): 
                 #self.log("pix %s %i"%(pix[i],i)) 
-                #Draw.rectangle(xy, fill=None, outline=None)           
-                self.draw[i].point((x,y), pix[i])
+                #Draw.rectangle(xy, fill=None, outline=None)  
+                loc = [(x*16+x,y*16+y),(x*16+x+16,y*16+y+16)]  
+                #self.log((x,y,loc))       
+                self.draw[i].rectangle(loc, fill=pix[i])                
                 self.compositeImage.paste(self.img[i], composite[i])
                 
             z = self.compositeImage.tobytes()
@@ -225,7 +227,7 @@ class PngMaker(Bolt):
         '-y', # (optional) overwrite output file if it exists
         '-f', 'rawvideo',
         '-vcodec','rawvideo',
-        '-s', '56x56', # size of one frame
+        '-s', '828x828', # size of one frame
         '-pix_fmt', 'argb',
         '-r', str(self.fps), # frames per second
         '-i', '-', # The imput comes from a pipe
