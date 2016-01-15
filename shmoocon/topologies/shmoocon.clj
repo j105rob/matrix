@@ -19,22 +19,10 @@
 	}
     ;; bolt configuration
     {
-        "delay-bolt" (python-bolt-spec
-	     options
-	     {["udp-spout" "orig"]["orig"]}
-	     "bolts.delay.Delay"
-	     {
-	     "orig" ["orig"]
-	     }
-	     :p 1
-	     :conf {
-	            "shmoocon.bolts.delay.emitStream","orig"
-	            "topology.tick.tuple.freq.secs",0.5
-	            }
-	     ),
+
     "anchor-bolt" (python-bolt-spec
 	     options
-	     {["delay-bolt" "orig"]["orig"]}
+	     {["udp-spout" "orig"]["orig"]}
 	     "bolts.anchor.Anchor"
 	     {
 	     "orig" ["orig"]
@@ -81,6 +69,7 @@
 	     :conf {
 	            "shmoocon.bolts.pngmaker.emitStream","orig"
 	            "shmoocon.bolts.pngmaker.id","uuid"
+	            "topology.tick.tuple.freq.secs",30
 	            }
 	     ),
     }

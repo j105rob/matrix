@@ -5,23 +5,39 @@ from PIL import Image, ImageDraw
 import itertools
 from subprocess import Popen, PIPE
 import math
+import scipy.stats as Stats
+import numpy
 
 from collections import deque
 
 class PngMaker(Bolt):
     def initialize(self, conf, ctx):
         self.size = (16,16)
-        self.frames = deque(maxlen=5000)
+        
         self.mode = "RGBA"
         self.fill = 255 #black
         self.cnt = 0
         self.fps = 20
         self.duration = 120
+        self.frames = deque(maxlen=(self.fps*self.duration))
+
         self.tick = 0
         self.sample = 30
         self.fileName =''
-        self.img = Image.new(self.mode,self.size,color=(self.fill,self.fill,self.fill,self.fill))
-        self.draw = ImageDraw.Draw(self.img, self.mode)  
+        
+        self.compositeImage = Image.new(self.mode,(56,56),color=(self.fill,self.fill,self.fill,self.fill))
+        
+        self.img = [Image.new(self.mode,self.size,color=(self.fill,self.fill,self.fill,self.fill)),
+                    Image.new(self.mode,self.size,color=(self.fill,self.fill,self.fill,self.fill)),
+                    Image.new(self.mode,self.size,color=(self.fill,self.fill,self.fill,self.fill)),
+                    Image.new(self.mode,self.size,color=(self.fill,self.fill,self.fill,self.fill)),
+                    Image.new(self.mode,self.size,color=(self.fill,self.fill,self.fill,self.fill))]
+        
+        self.draw = [ImageDraw.Draw(self.img[0], self.mode),
+                     ImageDraw.Draw(self.img[1], self.mode),
+                     ImageDraw.Draw(self.img[2], self.mode),
+                     ImageDraw.Draw(self.img[3], self.mode),
+                     ImageDraw.Draw(self.img[4], self.mode)]
         self.a = {}   
         self.command = [ 'ffmpeg',
         '-re',
@@ -37,7 +53,7 @@ class PngMaker(Bolt):
         # ffmpeg -re -f rawvideo -vcodec rawvideo -s 16x16 -pix_fmt argb -r 20 -i /tmp/vid -an http://ffserver.labs.g2-inc.net:8090/feed1.ffm
         # sudo -re -f rawvideo -vcodec rawvideo -s 16x16 -pix_fmt argb -r 20 -i /tmp/vid -f s16le -i /dev/zero -flags +global_header -ar 44100 -ab 16k -s 320x180 -vcodec h264 -pix_fmt yuv420p -g 25 -vb 32k -profile:v baseline -r 30 -f flv "rtmp://a.rtmp.youtube.com/live2/Boyobejaminhere.jg3p-dsbt-hseu-23uq"
         #self.videoPipe = Popen(self.command, stdin=PIPE,bufsize=1024)  
-        self.videoPipe = open('/tmp/vid', 'w')
+        #self.videoPipe = open('/tmp/vid', 'w')
         
     def process(self, tup): 
         raw = tup.values[0]
@@ -63,47 +79,99 @@ class PngMaker(Bolt):
                               'total_pkts_in':deque(maxlen=self.sample),
                               'total_pkts_out':deque(maxlen=self.sample),
                               'sport': {},
-                              'dport':{}
+                              'dport':{},
+                              'dstip':{},
+                              'flows':0,
+                              'bytes':0
                               }    
-                        
+             
+            self.a[ip]['flows'] +=1     
+            self.a[ip]['bytes'] +=raw['bytes_sent']   
             self.a[ip]['q_pkts'].append(raw['pkts_sent']) 
             self.a[ip]['q_bytes'].append(raw['bytes_sent']) 
+
+            if raw['dst_addr'] in self.a[ip]['dstip']:
+                self.a[ip]['dstip'][raw['dst_addr']]['flows'] +=1
+                self.a[ip]['dstip'][raw['dst_addr']]['bytes'] +=raw['bytes_sent']
+            else:
+                self.a[ip]['dstip'][raw['dst_addr']] = {'flows':1,'bytes':raw['bytes_sent']}
             
             if raw['src_port'] in self.a[ip]['sport']:
-                self.a[ip]['sport'][raw['src_port']] +=1
+                self.a[ip]['sport'][raw['src_port']]['flows'] +=1
+                self.a[ip]['sport'][raw['src_port']]['bytes'] +=raw['bytes_sent']
             else:
-                self.a[ip]['sport'][raw['src_port']] = 1
+                self.a[ip]['sport'][raw['src_port']] = {'flows':1,'bytes':raw['bytes_sent']}
                 
             if raw['dst_port'] in self.a[ip]['dport']:
-                self.a[ip]['dport'][raw['dst_port']] +=1
+                self.a[ip]['dport'][raw['dst_port']]['flows'] +=1
+                self.a[ip]['dport'][raw['dst_port']]['bytes'] +=raw['bytes_sent']
             else:
-                self.a[ip]['dport'][raw['dst_port']] = 1 
+                self.a[ip]['dport'][raw['dst_port']] = {'flows':1,'bytes':raw['bytes_sent']} 
                               
             if raw['inbound']:
                 self.a[ip]['total_pkts_in'].append(raw['pkts_sent'])
                 
             else:
                 self.a[ip]['total_pkts_out'].append(raw['pkts_sent'])
+
+            #channels    
+            channel1A = self.normalized(self.a[ip],'q_pkts') 
+            channel1B = self.normalized(self.a[ip],'q_bytes') 
+            channel2A = self.proportionOfInboundFlows(self.a[ip])      
+            channel2B = self.proportionOfOutboundFlows(self.a[ip])   
+              
+            channel4AKurt ,channel4BKurt, channel4ASkew,channel4BSkew  = self.describe(self.a[ip]['dport'])
+ 
+            channel5AKurt ,channel5BKurt ,channel5ASkew,channel5BSkew  = self.describe(self.a[ip]['sport'])
+  
+            channel7AKurt,channel7BKurt,aa,bb = self.describe(self.a[ip]['dstip'])
+             
+                        
+            #need to create several frame buffers.
+            
+            pix = [(channel1B,channel5BKurt,channel4BKurt,channel1A),
+                   (channel1B,channel5BKurt,channel4AKurt,channel1A),
+                   (channel1B,channel2A,channel5BKurt,channel1A),
+                   (channel1B,channel2B,channel4AKurt,channel1A),
+                   (channel1B,channel7AKurt,channel7BKurt,channel1A)
+                   ]
+            
+            composite = [(0,0),
+                         (0,40),
+                         (20,20),
+                         (40,0),
+                         (40,40)]
+            
+            for i in range(0,5): 
+                #self.log("pix %s %i"%(pix[i],i)) 
+                #Draw.rectangle(xy, fill=None, outline=None)           
+                self.draw[i].point((x,y), pix[i])
+                self.compositeImage.paste(self.img[i], composite[i])
                 
-            normG = self.normalized(self.a[ip],'q_pkts') 
-            normA = self.normalized(self.a[ip],'q_bytes') 
-            normR = self.proportionOfInboundFlows(self.a[ip])      
-            normB = self.proportionOfOutboundFlows(self.a[ip])     
-            
-            r = normR
-            g = normG
-            b = normB
-            a = normA
-            
-            self.draw.point((x,y), (a,r,g,b))
-            z = self.img.tobytes()
-            #self.frames.append(z)
-            self.videoPipe.write(z)
+            z = self.compositeImage.tobytes()
+            self.frames.append(z)
+
+            #self.videoPipe.write(z)
             
             #self.videoPipe.stdin.write(z)
             #self.videoPipe.stdin.flush()
             #self.videoPipe.wait()
             #self.log(self.a)
+
+    def describe(self,data):
+        axis = [ [k,v['flows'],v['bytes']] for k,v in data.iteritems() ]
+        a = numpy.array(axis)
+        n, min_max, mean, var, skew, kurt = Stats.describe(a)
+        
+        resp = (int((abs(kurt[1]+3/3))*255) if int((abs(kurt[1]/3))*255) < 255 else 255,
+               int((abs(kurt[2]+3/3))*255) if int((abs(kurt[2]/3))*255) < 255 else 255,
+               int((abs(skew[1])/2)*255) if int((abs(skew[1])/2)*255) < 255 else 255,
+               int((abs(skew[2])/2)*255) if int((abs(skew[2])/2)*255) < 255 else 255
+                )
+        
+        return resp
+            
+
         
     def proportionOfInboundFlows(self,data):  
         inbound = float(sum(data['total_pkts_in']))
@@ -157,12 +225,12 @@ class PngMaker(Bolt):
         '-y', # (optional) overwrite output file if it exists
         '-f', 'rawvideo',
         '-vcodec','rawvideo',
-        '-s', '16x16', # size of one frame
+        '-s', '56x56', # size of one frame
         '-pix_fmt', 'argb',
         '-r', str(self.fps), # frames per second
         '-i', '-', # The imput comes from a pipe
         '-an', # Tells FFMPEG not to expect any audio
-        'http://ffserver.labs.g2-inc.net:8090/feed1.ffm' ]
+        self.fileName ]
         
         self.log("Frame Buffer Length: %i"%(len(self.frames)))
         p = Popen(self.command, stdin=PIPE)
@@ -177,7 +245,8 @@ class PngMaker(Bolt):
         self.flush()  
                   
     def process_tick(self, tup):
-        pass
+        self.log("Tick")
+        self.sendVideo()
   
 if __name__ == '__main__':
     c = PngMaker()
